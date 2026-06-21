@@ -3,3 +3,4 @@ __pycache__
 docs/build
 .idea/
 plugin_packaging/*.tar
+dist/

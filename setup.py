@@ -12,7 +12,7 @@ setup(
     name='linkSHARK',
     version='2.1.1',
     description='Issue linking for smartSHARK.',
-    install_requires=['mongoengine', 'pymongo', 'pycoshark>=1.2.6'],
+    install_requires=['mongoengine', 'pymongo', 'pycoshark==1.4.5'],
     author='sherbold',
     author_email='herbold@cs.uni-goettingen.de',
     url='https://github.com/smartshark/linkSHARK',
