@@ -10,8 +10,6 @@ from pycoshark.mongomodels import VCSSystem, Commit, IssueSystem, Issue, Project
 from pycoshark.utils import create_mongodb_uri_string
 from bson.objectid import ObjectId
 
-# VCS_DB_NAME = "v_c_s_system"
-
 class LinkSHARK:
     """Determines linked issues for commits
     """
@@ -63,17 +61,6 @@ class LinkSHARK:
                 logging.warning(f"Could not relax {model_class.__name__} validation. Error: {e}")
 
         vcs_system = VCSSystem.objects(project_id=project_id).get()
-        # Query the raw database collection directly
-        # db_client = VCSSystem._get_db()
-        # raw_collection = db_client[VCS_DB_NAME]
-        # logging.info("Raw collection: {}".format(raw_collection))
-        
-        # vcs_system_doc = raw_collection.find_one({"project_id": project_id})
-    
-        # if not vcs_system_doc:
-        #     raise DoesNotExist(f"Raw MongoDB lookup failed to find project_id {project_id} in collection '{raw_collection.name}'")
-        
-        # vcs_system = VCSSystem._from_son(vcs_system_doc)
         self._itss = []
         self._log.info('found the following issue tracking systems:')
         for its in IssueSystem.objects(project_id=project_id).order_by('url'):
