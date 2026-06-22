@@ -48,7 +48,7 @@ class LinkSHARK:
         # Get the id of the project for which the code entities shall be merged
         try:
             project_id = Project.objects(name=cfg.project_name).get().id
-            logging.info("Project ID = {}".format(type(project_id)))
+            self._log.info("Project ID = {}".format(type(project_id)))
         except DoesNotExist:
             self._log.error('Project %s not found!' % cfg.project_name)
             sys.exit(1)
@@ -56,9 +56,9 @@ class LinkSHARK:
         for model_class in [VCSSystem, Commit, Issue, File, FileAction]:
             try:
                 model_class._meta['strict'] = False
-                logging.info(f"Successfully relaxed {model_class.__name__} strict schema validation constraints.")
+                self._log.info(f"Successfully relaxed {model_class.__name__} strict schema validation constraints.")
             except Exception as e:
-                logging.warning(f"Could not relax {model_class.__name__} validation. Error: {e}")
+                self._log.warning(f"Could not relax {model_class.__name__} validation. Error: {e}")
 
         vcs_system = VCSSystem.objects(project_id=project_id).get()
         self._itss = []
@@ -94,10 +94,10 @@ class LinkSHARK:
         total_szz_links = 0
         for i,issue_system in enumerate(self._itss):
             project_id_string = correct_keys_per_its[i]
-            logging.info("project-id_string = {}".format(project_id_string))
+            self._log.info("project-id_string = {}".format(project_id_string))
             # for issue in Issue.objects(issue_system_ids=issue_system.id):
             for issue in Issue.objects(issue_system_id=issue_system.id):
-                logging.info("Processing issue_system ID = {}".format(issue_system.id))
+                self._log.info("Processing issue_system ID = {}".format(issue_system.id))
                 # Accept the issue if it is a pure number (GitHub) OR if it matches the prefix (Jira)
                 if issue.external_id.isdigit() or issue.external_id.startswith(project_id_string):
                     try:
@@ -107,11 +107,11 @@ class LinkSHARK:
                         self._log.error("index error because SZZ currently only support JIRA, may not link all issues correctly:", issue.external_id)
                         continue
 
-        logging.info("VCSSytem_ID = {}".format(vcs_system.id))
+        self._log.info("VCSSytem_ID = {}".format(vcs_system.id))
      
         # Build a raw query 
         vcs_id_str, vcs_id_obj = str(vcs_system.id), ObjectId(str(vcs_system.id))
-        logging.info(f"Searching for Commits with VCS ID: {vcs_id_str}")
+        self._log.info(f"Searching for Commits with VCS ID: {vcs_id_str}")
 
         raw_query = {
             "$or": [
@@ -131,10 +131,10 @@ class LinkSHARK:
         
         # Log the actual count so we can see if it worked
         commit_count = commit_cursor.count()
-        logging.info(f"Total matched commits found to process: {commit_count}")
+        self._log.info(f"Total matched commits found to process: {commit_count}")
 
         for i, commit in enumerate(commit_cursor):
-            logging.info("Get linked issues...")
+            self._log.info("Get linked issues...")
             # if not getattr(commit, 'vcs_system_ids', None):
             #     commit.vcs_system_ids = [vcs_id_obj]
             if not getattr(commit, 'vcs_system_id', None):
@@ -166,16 +166,16 @@ class LinkSHARK:
         if git_svn_start >= 0:
             commit_message = commit_message[:git_svn_start]
         for its in self._itss:
-            logging.info(f"Checking tracker URL: {its.url}")
+            self._log.info(f"Checking tracker URL: {its.url}")
             if 'jira' in its.url.lower():
                 issues = self._jira_issues(its, commit_message)
             elif 'bugzilla' in its.url.lower():
                 issues = self._bz_issues(its, commit_message)
             elif 'github' in its.url.lower() or 'api.github' in its.url.lower():
-                logging.info(f"Routing to GitHub handler for {its.url}")
+                self._log.info(f"Routing to GitHub handler for {its.url}")
                 issues = self._gh_issues(its, commit_message)
             else:
-                logging.info(f"URL {its.url} did not match any platform criteria!")
+                self._log.info(f"URL {its.url} did not match any platform criteria!")
                 issues = []
 
             # linked issues are collected regardless of issue type
@@ -197,12 +197,12 @@ class LinkSHARK:
             try:
                 # i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=str(captured_id))
                 i = Issue.objects.get(issue_system_id=issue_system.id, external_id=str(captured_id))
-                logging.info(f"Successfully mapped ID {captured_id} to Issue Object ID {i.id}")
+                self._log.info(f"Successfully mapped ID {captured_id} to Issue Object ID {i.id}")
                 self._found_keys.add(captured_id.upper())
                 ret.append(i)
 
             except Issue.DoesNotExist:
-                logging.info(f"Issue external_id '{captured_id}' with system ID {issue_system.id} does not exist in DB.")
+                self._log.info(f"Issue external_id '{captured_id}' with system ID {issue_system.id} does not exist in DB.")
                 self._errored_keys.add(captured_id.upper())
         return ret
 
