@@ -2,7 +2,7 @@ import json
 import logging
 import logging.config
 import os
-
+import sys
 
 def setup_logging(default_path=os.path.dirname(os.path.realpath(__file__)) + "/../loggerConfiguration.json",
                   default_level=logging.INFO):
@@ -19,6 +19,11 @@ def setup_logging(default_path=os.path.dirname(os.path.realpath(__file__)) + "/.
         logging.config.dictConfig(config)
     else:
         logging.basicConfig(level=default_level)
+    
+    sys.stdout = sys.stderr if '--help' in sys.argv else sys.stdout 
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, force=True)
+    logging.getLogger("main").handlers = [logging.StreamHandler(sys.stdout)]
+    logging.getLogger("main").propagate = False
 
 
 class ConfigValidationException(Exception):
