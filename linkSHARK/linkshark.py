@@ -6,7 +6,7 @@ import timeit
 import re
 
 from mongoengine import connect, DoesNotExist
-from pycoshark.mongomodels import VCSSystem, Commit, IssueSystem, Issue, Project, Event, FileAction, File, Identity
+from pycoshark.mongomodels import VCSSystem, Commit, IssueSystem, Issue, Project, IssueEvent, FileAction, File, Identity
 from pycoshark.utils import create_mongodb_uri_string
 from bson.objectid import ObjectId
 
@@ -86,8 +86,7 @@ class LinkSHARK:
                 self._broken_keys[self._itss[i].url] = broken_keys.split(',')
 
         self._log.info("Starting issue linking")
-        # commit_count = Commit.objects(vcs_system_ids=vcs_system.id).count()
-        commit_count = Commit.objects(vcs_system_id=vcs_system.id).count()
+        commit_count = Commit.objects(vcs_system_ids=vcs_system.id).count()
 
         issue_map = {}
         total_regular_links = 0
@@ -95,8 +94,7 @@ class LinkSHARK:
         for i,issue_system in enumerate(self._itss):
             project_id_string = correct_keys_per_its[i]
             self._log.info("project-id_string = {}".format(project_id_string))
-            # for issue in Issue.objects(issue_system_ids=issue_system.id):
-            for issue in Issue.objects(issue_system_id=issue_system.id):
+            for issue in Issue.objects(issue_system_ids=issue_system.id):
                 self._log.info("Processing issue_system ID = {}".format(issue_system.id))
                 # Accept the issue if it is a pure number (GitHub) OR if it matches the prefix (Jira)
                 if issue.external_id.isdigit() or issue.external_id.startswith(project_id_string):
@@ -115,18 +113,13 @@ class LinkSHARK:
 
         raw_query = {
             "$or": [
-                # {"vcs_system_ids": vcs_id_obj},
-                # {"vcs_system_ids": vcs_id_str},
-                {"vcs_system_id": vcs_id_obj},
-                {"vcs_system_id": vcs_id_str}
+                {"vcs_system_ids": vcs_id_obj},
+                {"vcs_system_ids": vcs_id_str}
             ]
         }
 
-        # commit_cursor = Commit.objects(__raw__=raw_query).only(
-        #     'id', 'revision_hash', 'vcs_system_ids', 'message', 'author_id', 'committer_id'
-        # )
         commit_cursor = Commit.objects(__raw__=raw_query).only(
-            'id', 'revision_hash', 'vcs_system_id', 'message', 'author_id', 'committer_id'
+            'id', 'revision_hash', 'vcs_system_ids', 'message', 'author_id', 'committer_id'
         )
         
         # Log the actual count so we can see if it worked
@@ -135,10 +128,8 @@ class LinkSHARK:
 
         for i, commit in enumerate(commit_cursor):
             self._log.info("Get linked issues...")
-            # if not getattr(commit, 'vcs_system_ids', None):
-            #     commit.vcs_system_ids = [vcs_id_obj]
-            if not getattr(commit, 'vcs_system_id', None):
-                commit.vcs_system_id = [vcs_id_obj]
+            if not getattr(commit, 'vcs_system_ids', None):
+                commit.vcs_system_ids = [vcs_id_obj]
             if i%100==0:
                 self._log.info("%i/%i  commits finished",i,commit_count)
             issue_links = self._get_issue_links(commit)
@@ -195,8 +186,7 @@ class LinkSHARK:
         for m in self._direct_link_gh.finditer(message):
             captured_id = m.group('ID')
             try:
-                # i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=str(captured_id))
-                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=str(captured_id))
+                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=str(captured_id))
                 self._log.info(f"Successfully mapped ID {captured_id} to Issue Object ID {i.id}")
                 self._found_keys.add(captured_id.upper())
                 ret.append(i)
@@ -210,8 +200,7 @@ class LinkSHARK:
         ret = []
         for m in self._direct_link_bz.finditer(message):
             try:
-                # i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=m.group('ID').upper())
-                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=m.group('ID').upper())
+                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=m.group('ID').upper())
                 self._found_keys.add(m.group('ID').upper())
                 ret.append(i)
 
@@ -233,8 +222,7 @@ class LinkSHARK:
                         # key not broken
                         pass
 
-                # i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=issue_id)
-                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=issue_id)
+                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=issue_id)
                 self._found_keys.add(m.group('ID').upper())
                 ret.append(i)
             except Issue.DoesNotExist:
@@ -244,8 +232,7 @@ class LinkSHARK:
             for m in self._bug_id_pattern.finditer(message):
                 try:
                     issue_id = self._correct_key[issue_system.url]+'-'+m.group('ID')
-                    # issue = Issue.objects.get(issue_system_ids=issue_system.id, external_id=issue_id)
-                    issue = Issue.objects.get(issue_system_id=issue_system.id, external_id=issue_id)
+                    issue = Issue.objects.get(issue_system_ids=issue_system.id, external_id=issue_id)
                     ret.append(issue)
                 except Issue.DoesNotExist:
                     pass
@@ -320,7 +307,7 @@ class LinkSHARK:
             resolved = True
             fixed |= issue.resolution.lower() != 'duplicated'
 
-        for e in Event.objects.filter(issue_id=issue.id):
+        for e in IssueEvent.objects.filter(issue_id=issue.id):
             resolved |= e.status is not None and e.status.lower() == 'status' and e.new_value is not None and e.new_value.lower() in \
                         ['resolved', 'closed']
             fixed |= e.status is not None and e.status.lower() == 'resolution' and e.new_value is not None and e.new_value.lower() == 'fixed'
@@ -350,7 +337,7 @@ class LinkSHARK:
             return issue.assignee_id==commit.author_id or issue.assignee_id==commit.committer_id
 
     def _szz_has_files_attached(self, issue, file_names):
-        for e in Event.objects.filter(issue_id=issue.id, status='Attachment'):
+        for e in IssueEvent.objects.filter(issue_id=issue.id, status='Attachment'):
             if e.new_value in file_names:
                 return True
         return False
