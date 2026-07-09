@@ -52,14 +52,6 @@ class LinkSHARK:
         except DoesNotExist:
             self._log.error('Project %s not found!' % cfg.project_name)
             sys.exit(1)
-        
-        for model_class in [VCSSystem, Commit, Issue, File, FileAction]:
-            try:
-                model_class._meta['strict'] = False
-                self._log.info(f"Successfully relaxed {model_class.__name__} strict schema validation constraints.")
-            except Exception as e:
-                self._log.warning(f"Could not relax {model_class.__name__} validation. Error: {e}")
-
         vcs_system = VCSSystem.objects(project_id=project_id).get()
         self._itss = []
         self._log.info('found the following issue tracking systems:')
