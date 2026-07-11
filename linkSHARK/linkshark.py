@@ -91,43 +91,23 @@ class LinkSHARK:
                 if issue.external_id.isdigit() or issue.external_id.startswith(project_id_string):
                     try:
                         issue_number = [int(s) for s in issue.external_id.split('-') if s.isdigit()][0]
-                        issue_map.setdefault(issue_number, []).append(issue)
                     except IndexError:
                         self._log.error("index error because SZZ currently only support JIRA, may not link all issues correctly:", issue.external_id)
                         continue
-
+                    if issue_number not in issue_map:
+                        issue_map[issue_number] = [issue]
+                    else:
+                        issue_map[issue_number].append(issue)
         self._log.info("VCSSytem_ID = {}".format(vcs_system.id))
-     
-        # Build a raw query 
-        vcs_id_str, vcs_id_obj = str(vcs_system.id), ObjectId(str(vcs_system.id))
-        self._log.info(f"Searching for Commits with VCS ID: {vcs_id_str}")
-
-        raw_query = {
-            "$or": [
-                {"vcs_system_ids": vcs_id_obj},
-                {"vcs_system_ids": vcs_id_str}
-            ]
-        }
-
-        commit_cursor = Commit.objects(__raw__=raw_query).only(
-            'id', 'revision_hash', 'vcs_system_ids', 'message', 'author_id', 'committer_id'
-        )
-        
-        # Log the actual count so we can see if it worked
-        commit_count = commit_cursor.count()
-        self._log.info(f"Total matched commits found to process: {commit_count}")
-
-        for i, commit in enumerate(commit_cursor):
-            if not getattr(commit, 'vcs_system_ids', None):
-                commit.vcs_system_ids = [vcs_id_obj]
+        for i,commit in enumerate(Commit.objects(vcs_system_ids=vcs_system.id).only('id', 'revision_hash', 'vcs_system_ids', 'message', 'author_id', 'committer_id')):
             if i%100==0:
                 self._log.info("%i/%i  commits finished",i,commit_count)
             issue_links = self._get_issue_links(commit)
-            szz_links = self._get_szz_issue_links(commit, issue_map)
             if len(issue_links) > 0:
                 commit.linked_issue_ids = issue_links
                 commit.save()
                 total_regular_links += len(issue_links)
+            szz_links = self._get_szz_issue_links(commit, issue_map)
             if len(szz_links) > 0:
                 commit.szz_issue_ids = szz_links
                 commit.save()
@@ -151,7 +131,7 @@ class LinkSHARK:
                 issues = self._jira_issues(its, commit_message)
             elif 'bugzilla' in its.url.lower():
                 issues = self._bz_issues(its, commit_message)
-            elif 'github' in its.url.lower() or 'api.github' in its.url.lower():
+            elif 'github' in its.url.lower():
                 issues = self._gh_issues(its, commit_message)
             else:
                 self._log.info(f"URL {its.url} did not match any platform criteria!")
@@ -172,15 +152,13 @@ class LinkSHARK:
     def _gh_issues(self, issue_system, message):
         ret = []
         for m in self._direct_link_gh.finditer(message):
-            captured_id = m.group('ID')
             try:
-                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=str(captured_id))
-                self._found_keys.add(captured_id.upper())
+                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=m.group('ID').upper())
+                self._found_keys.add(m.group('ID').upper())
                 ret.append(i)
 
             except Issue.DoesNotExist:
-                self._log.info(f"Issue external_id '{captured_id}' with system ID {issue_system.id} does not exist in DB.")
-                self._errored_keys.add(captured_id.upper())
+                self._errored_keys.add(m.group('ID').upper())
         return ret
 
     def _bz_issues(self, issue_system, message):
