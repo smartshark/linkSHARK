@@ -152,7 +152,7 @@ class LinkSHARK:
         ret = []
         for m in self._direct_link_gh.finditer(message):
             try:
-                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=m.group('ID').upper())
+                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=m.group('ID').upper())
                 self._found_keys.add(m.group('ID').upper())
                 ret.append(i)
 
