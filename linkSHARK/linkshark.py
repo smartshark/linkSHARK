@@ -8,7 +8,6 @@ import re
 from mongoengine import connect, DoesNotExist
 from pycoshark.mongomodels import VCSSystem, Commit, IssueSystem, Issue, Project, IssueEvent, FileAction, File, Identity
 from pycoshark.utils import create_mongodb_uri_string
-from bson.objectid import ObjectId
 
 class LinkSHARK:
     """Determines linked issues for commits
