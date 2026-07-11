@@ -87,7 +87,6 @@ class LinkSHARK:
             project_id_string = correct_keys_per_its[i]
             self._log.info("project-id_string = {}".format(project_id_string))
             for issue in Issue.objects(issue_system_ids=issue_system.id):
-                self._log.info("Processing issue_system ID = {}".format(issue_system.id))
                 # Accept the issue if it is a pure number (GitHub) OR if it matches the prefix (Jira)
                 if issue.external_id.isdigit() or issue.external_id.startswith(project_id_string):
                     try:
@@ -119,7 +118,6 @@ class LinkSHARK:
         self._log.info(f"Total matched commits found to process: {commit_count}")
 
         for i, commit in enumerate(commit_cursor):
-            self._log.info("Get linked issues...")
             if not getattr(commit, 'vcs_system_ids', None):
                 commit.vcs_system_ids = [vcs_id_obj]
             if i%100==0:
@@ -149,13 +147,11 @@ class LinkSHARK:
         if git_svn_start >= 0:
             commit_message = commit_message[:git_svn_start]
         for its in self._itss:
-            self._log.info(f"Checking tracker URL: {its.url}")
             if 'jira' in its.url.lower():
                 issues = self._jira_issues(its, commit_message)
             elif 'bugzilla' in its.url.lower():
                 issues = self._bz_issues(its, commit_message)
             elif 'github' in its.url.lower() or 'api.github' in its.url.lower():
-                self._log.info(f"Routing to GitHub handler for {its.url}")
                 issues = self._gh_issues(its, commit_message)
             else:
                 self._log.info(f"URL {its.url} did not match any platform criteria!")
@@ -179,7 +175,6 @@ class LinkSHARK:
             captured_id = m.group('ID')
             try:
                 i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=str(captured_id))
-                self._log.info(f"Successfully mapped ID {captured_id} to Issue Object ID {i.id}")
                 self._found_keys.add(captured_id.upper())
                 ret.append(i)
 
