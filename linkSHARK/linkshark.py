@@ -21,7 +21,6 @@ class LinkSHARK:
         # precompile regex
         self._direct_link_jira = re.compile('(?P<ID>[A-Z][A-Z0-9_]+-[0-9]+)', re.I | re.M)
         self._direct_link_bz = re.compile('(bug|issue|bugzilla)[s]{0,1}[#\s]*(?P<ID>[0-9]+)', re.I | re.M)
-        # self._direct_link_gh = re.compile(r'(bug|issue|close|fixes|pull request|pr)?[s]{0,1}[#\s]+(?P<ID>[0-9]+)', re.I | re.M)
         self._direct_link_gh = re.compile('(bug|issue|close|fixes)[s]{0,1}[#\s]*(?P<ID>[0-9]+)', re.I | re.M)
         self._direct_link_szz = re.compile('(\d+)', re.M)
         self._bug_id_pattern = re.compile(r"jira(\sissue)?\s\#?(?P<ID>\d+)", re.I | re.M)
