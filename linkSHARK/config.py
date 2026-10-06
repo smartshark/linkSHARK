@@ -3,7 +3,6 @@ import logging
 import logging.config
 import os
 
-
 def setup_logging(default_path=os.path.dirname(os.path.realpath(__file__)) + "/../loggerConfiguration.json",
                   default_level=logging.INFO):
     """

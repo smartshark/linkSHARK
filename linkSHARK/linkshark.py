@@ -6,9 +6,8 @@ import timeit
 import re
 
 from mongoengine import connect, DoesNotExist
-from pycoshark.mongomodels import VCSSystem, Commit, IssueSystem, Issue, Project, Event, FileAction, File, Identity
+from pycoshark.mongomodels import VCSSystem, Commit, IssueSystem, Issue, Project, IssueEvent, FileAction, File, Identity
 from pycoshark.utils import create_mongodb_uri_string
-
 
 class LinkSHARK:
     """Determines linked issues for commits
@@ -47,10 +46,10 @@ class LinkSHARK:
         # Get the id of the project for which the code entities shall be merged
         try:
             project_id = Project.objects(name=cfg.project_name).get().id
+            self._log.info("Project ID = {}".format(type(project_id)))
         except DoesNotExist:
             self._log.error('Project %s not found!' % cfg.project_name)
             sys.exit(1)
-
         vcs_system = VCSSystem.objects(project_id=project_id).get()
         self._itss = []
         self._log.info('found the following issue tracking systems:')
@@ -58,6 +57,8 @@ class LinkSHARK:
             self._log.info(its.url)
             self._itss.append(its)
 
+        # Initialize as a list populated with default project names for each tracking system
+        correct_keys_per_its = [cfg.project_name] * len(self._itss)
         if len(cfg.correct_key)>0:
             correct_keys_per_its = cfg.correct_key.split(';')
             if len(correct_keys_per_its) != len(self._itss):
@@ -75,14 +76,17 @@ class LinkSHARK:
                 self._broken_keys[self._itss[i].url] = broken_keys.split(',')
 
         self._log.info("Starting issue linking")
-        commit_count = Commit.objects(vcs_system_id=vcs_system.id).count()
+        commit_count = Commit.objects(vcs_system_ids=vcs_system.id).count()
 
         issue_map = {}
+        total_regular_links = 0
+        total_szz_links = 0
         for i,issue_system in enumerate(self._itss):
             project_id_string = correct_keys_per_its[i]
-
-            for issue in Issue.objects(issue_system_id=issue_system.id):
-                if issue.external_id.startswith(project_id_string):
+            self._log.info("project-id_string = {}".format(project_id_string))
+            for issue in Issue.objects(issue_system_ids=issue_system.id):
+                # Accept the issue if it is a pure number (GitHub) OR if it matches the prefix (Jira)
+                if issue.external_id.isdigit() or issue.external_id.startswith(project_id_string):
                     try:
                         issue_number = [int(s) for s in issue.external_id.split('-') if s.isdigit()][0]
                     except IndexError:
@@ -92,19 +96,23 @@ class LinkSHARK:
                         issue_map[issue_number] = [issue]
                     else:
                         issue_map[issue_number].append(issue)
-
-        for i,commit in enumerate(Commit.objects(vcs_system_id=vcs_system.id).only('id', 'revision_hash', 'vcs_system_id', 'message', 'author_id', 'committer_id')):
+        self._log.info("VCSSytem_ID = {}".format(vcs_system.id))
+        for i,commit in enumerate(Commit.objects(vcs_system_ids=vcs_system.id).only('id', 'revision_hash', 'vcs_system_ids', 'message', 'author_id', 'committer_id')):
             if i%100==0:
                 self._log.info("%i/%i  commits finished",i,commit_count)
             issue_links = self._get_issue_links(commit)
             if len(issue_links) > 0:
                 commit.linked_issue_ids = issue_links
                 commit.save()
+                total_regular_links += len(issue_links)
             szz_links = self._get_szz_issue_links(commit, issue_map)
             if len(szz_links) > 0:
                 commit.szz_issue_ids = szz_links
                 commit.save()
+                total_szz_links += len(szz_links)
 
+        self._log.info(f"Total Regular Issue Links Created: {total_regular_links}")
+        self._log.info(f"Total SZZ Algorithm Links Created: {total_szz_links}")
         elapsed = timeit.default_timer() - start_time
         self._log.info("Execution time: %0.5f s" % elapsed)
 
@@ -117,12 +125,15 @@ class LinkSHARK:
         if git_svn_start >= 0:
             commit_message = commit_message[:git_svn_start]
         for its in self._itss:
-            if 'jira' in its.url:
+            if 'jira' in its.url.lower():
                 issues = self._jira_issues(its, commit_message)
-            elif 'bugzilla' in its.url:
+            elif 'bugzilla' in its.url.lower():
                 issues = self._bz_issues(its, commit_message)
-            elif 'github' in its.url:
+            elif 'github' in its.url.lower():
                 issues = self._gh_issues(its, commit_message)
+            else:
+                self._log.info(f"URL {its.url} did not match any platform criteria!")
+                issues = []
 
             # linked issues are collected regardless of issue type
             for r in issues:
@@ -140,7 +151,7 @@ class LinkSHARK:
         ret = []
         for m in self._direct_link_gh.finditer(message):
             try:
-                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=m.group('ID').upper())
+                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=m.group('ID').upper())
                 self._found_keys.add(m.group('ID').upper())
                 ret.append(i)
 
@@ -152,7 +163,7 @@ class LinkSHARK:
         ret = []
         for m in self._direct_link_bz.finditer(message):
             try:
-                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=m.group('ID').upper())
+                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=m.group('ID').upper())
                 self._found_keys.add(m.group('ID').upper())
                 ret.append(i)
 
@@ -174,7 +185,7 @@ class LinkSHARK:
                         # key not broken
                         pass
 
-                i = Issue.objects.get(issue_system_id=issue_system.id, external_id=issue_id)
+                i = Issue.objects.get(issue_system_ids=issue_system.id, external_id=issue_id)
                 self._found_keys.add(m.group('ID').upper())
                 ret.append(i)
             except Issue.DoesNotExist:
@@ -184,7 +195,7 @@ class LinkSHARK:
             for m in self._bug_id_pattern.finditer(message):
                 try:
                     issue_id = self._correct_key[issue_system.url]+'-'+m.group('ID')
-                    issue = Issue.objects.get(issue_system_id=issue_system.id, external_id=issue_id)
+                    issue = Issue.objects.get(issue_system_ids=issue_system.id, external_id=issue_id)
                     ret.append(issue)
                 except Issue.DoesNotExist:
                     pass
@@ -259,7 +270,7 @@ class LinkSHARK:
             resolved = True
             fixed |= issue.resolution.lower() != 'duplicated'
 
-        for e in Event.objects.filter(issue_id=issue.id):
+        for e in IssueEvent.objects.filter(issue_id=issue.id):
             resolved |= e.status is not None and e.status.lower() == 'status' and e.new_value is not None and e.new_value.lower() in \
                         ['resolved', 'closed']
             fixed |= e.status is not None and e.status.lower() == 'resolution' and e.new_value is not None and e.new_value.lower() == 'fixed'
@@ -289,7 +300,7 @@ class LinkSHARK:
             return issue.assignee_id==commit.author_id or issue.assignee_id==commit.committer_id
 
     def _szz_has_files_attached(self, issue, file_names):
-        for e in Event.objects.filter(issue_id=issue.id, status='Attachment'):
+        for e in IssueEvent.objects.filter(issue_id=issue.id, status='Attachment'):
             if e.new_value in file_names:
                 return True
         return False
