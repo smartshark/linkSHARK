@@ -4,3 +4,4 @@ docs/build
 .idea/
 plugin_packaging/*.tar
 dist/
+.DS_store

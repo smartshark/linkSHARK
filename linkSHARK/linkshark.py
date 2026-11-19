@@ -125,7 +125,7 @@ class LinkSHARK:
         if git_svn_start >= 0:
             commit_message = commit_message[:git_svn_start]
         for its in self._itss:
-            if 'jira' in its.url.lower():
+            if 'jira' in its.url.lower() or 'atlassian' in its.url.lower():
                 issues = self._jira_issues(its, commit_message)
             elif 'bugzilla' in its.url.lower():
                 issues = self._bz_issues(its, commit_message)
@@ -221,7 +221,7 @@ class LinkSHARK:
 
         issues = None
         for its in self._itss:
-            if 'jira' in its.url:
+            if 'jira' in its.url.lower() or 'atlassian' in its.url.lower():
                 issues = self._szz_issues(commit, commit_message, issue_map, file_names, syntactic_score)
         if issues is not None:
             for issue in issues:
@@ -250,7 +250,7 @@ class LinkSHARK:
                 continue
             for issue in issue_map[issue_number]:
                 if not issue.issue_type:
-                    self._log.warning('could not find issue type for issue %s' % issue.id)
+                    self._log.warning('could not find issue type for issue %s' % issue.external_id)
                     continue
 
                 if issue.issue_type.lower() == 'bug':
@@ -268,7 +268,8 @@ class LinkSHARK:
         fixed = False
         if issue.status in ['resolved', 'closed']:
             resolved = True
-            fixed |= issue.resolution.lower() != 'duplicated'
+            if issue.resolution:
+                fixed |= issue.resolution.lower() != 'duplicated'
 
         for e in IssueEvent.objects.filter(issue_id=issue.id):
             resolved |= e.status is not None and e.status.lower() == 'status' and e.new_value is not None and e.new_value.lower() in \
